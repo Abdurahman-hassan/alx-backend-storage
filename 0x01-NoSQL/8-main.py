@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """ 8-main """
 from pymongo import MongoClient
 list_all = __import__('8-all').list_all
