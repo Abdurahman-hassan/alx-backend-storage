@@ -1,54 +1,39 @@
 #!/usr/bin/env python3
-""" 0x02-redis_basic """
+'''A module with tools for request caching and tracking.
+'''
 import redis
 import requests
-from typing import Callable
 from functools import wraps
+from typing import Callable
 
-# Initialize Redis client
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
-
-
-def cache_page(expiration: int = 10) -> Callable:
-    """
-    Decorator to cache the HTML content of a URL with an expiration time.
-    """
-
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(url: str) -> str:
-            cached_page = redis_client.get(url)
-            if cached_page:
-                return cached_page.decode('utf-8')
-
-            page_content = func(url)
-            redis_client.setex(url, expiration, page_content)
-            return page_content
-
-        return wrapper
-
-    return decorator
+redis_store = redis.Redis()
+'''The module-level Redis instance.
+'''
 
 
-def count_accesses(func: Callable) -> Callable:
-    """
-    Decorator to count how many times a particular URL was accessed.
-    """
+def data_cacher(method: Callable) -> Callable:
+    '''Caches the output of fetched data.
+    '''
 
-    @wraps(func)
-    def wrapper(url: str) -> str:
-        count_key = f"count:{url}"
-        redis_client.incr(count_key)
-        return func(url)
+    @wraps(method)
+    def invoker(url) -> str:
+        '''The wrapper function for caching the output.
+        '''
+        redis_store.incr(f'count:{url}')
+        result = redis_store.get(f'result:{url}')
+        if result:
+            return result.decode('utf-8')
+        result = method(url)
+        redis_store.set(f'count:{url}', 0)
+        redis_store.setex(f'result:{url}', 10, result)
+        return result
 
-    return wrapper
+    return invoker
 
 
-@cache_page(expiration=10)
-@count_accesses
+@data_cacher
 def get_page(url: str) -> str:
-    """
-    Obtain the HTML content of a particular URL and return it.
-    """
-    response = requests.get(url)
-    return response.text
+    '''Returns the content of a URL after caching the request's response,
+    and tracking the request.
+    '''
+    return requests.get(url).text
