@@ -99,16 +99,12 @@ class Cache:
         return value
 
     def get_str(self, key: str) -> str:
-        '''
-            Get a string from the cache.
-        '''
+        """Get a string from the cache."""
         value = self._redis.get(key)
         return value.decode('utf-8')
 
     def get_int(self, key: str) -> int:
-        '''
-            Get an int from the cache.
-        '''
+        """ Get an int from the cache """
         value = self._redis.get(key)
         try:
             value = int(value.decode('utf-8'))
