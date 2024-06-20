@@ -1,48 +1,54 @@
 #!/usr/bin/env python3
-
-"""Obtain the HTML content of a particular URL and returns it."""
-
-import requests
+""" 0x02-redis_basic """
 import redis
-from functools import wraps
+import requests
 from typing import Callable
+from functools import wraps
 
-redis_client = redis.Redis()
+# Initialize Redis client
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
 
 
-def cache_page(methos: Callable) -> Callable:
+def cache_page(expiration: int = 10) -> Callable:
     """
-    Decorator to cache the HTML content of a URL and track the
-    number of times it was accessed.
+    Decorator to cache the HTML content of a URL with an expiration time.
     """
 
-    @wraps(methos)
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(url: str) -> str:
+            cached_page = redis_client.get(url)
+            if cached_page:
+                return cached_page.decode('utf-8')
+
+            page_content = func(url)
+            redis_client.setex(url, expiration, page_content)
+            return page_content
+
+        return wrapper
+
+    return decorator
+
+
+def count_accesses(func: Callable) -> Callable:
+    """
+    Decorator to count how many times a particular URL was accessed.
+    """
+
+    @wraps(func)
     def wrapper(url: str) -> str:
-        """Wraps the original method"""
-
-        # Increment the count for the URL
         count_key = f"count:{url}"
         redis_client.incr(count_key)
-
-        # Check if the URL content is already cached
-        cache_key = f"cached:{url}"
-        cached_content = redis_client.get(cache_key)
-        if cached_content:
-            return cached_content.decode('utf-8')
-
-        # Get the HTML content from the URL
-        html_content = methos(url)
-
-        redis_client.set(count_key, 0)
-        # Cache the content with an expiration time
-        redis_client.setex(cache_key, 10, html_content)
-        return html_content
+        return func(url)
 
     return wrapper
 
 
-@cache_page
+@cache_page(expiration=10)
+@count_accesses
 def get_page(url: str) -> str:
-    """Get the HTML content of a particular URL."""
+    """
+    Obtain the HTML content of a particular URL and return it.
+    """
     response = requests.get(url)
     return response.text
